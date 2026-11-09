@@ -61,6 +61,9 @@ await memory.add(messages, { userId: "alice", metadata: { category: "movies" } }
 ```
 </CodeGroup>
 
+In Python, set `max_tokens` to `0` to omit Ollama's `num_predict` option and use
+the server or model default. Positive values set an explicit generation limit.
+
 ## Config
 
 All available parameters for the `ollama` config are present in [Master List of All Params in Config](../config).

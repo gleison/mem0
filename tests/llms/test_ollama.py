@@ -34,6 +34,19 @@ def test_generate_response_without_tools(mock_ollama_client):
     assert response == "I'm doing well, thank you for asking!"
 
 
+def test_generate_response_without_token_limit(mock_ollama_client):
+    config = OllamaConfig(model="llama3.1:70b", temperature=0.7, max_tokens=0, top_p=1.0)
+    llm = OllamaLLM(config)
+    messages = [{"role": "user", "content": "Hello"}]
+    mock_ollama_client.chat.return_value = {"message": {"content": "Hello"}}
+
+    llm.generate_response(messages)
+
+    mock_ollama_client.chat.assert_called_once_with(
+        model="llama3.1:70b", messages=messages, options={"temperature": 0.7, "top_p": 1.0}
+    )
+
+
 def test_generate_response_with_tools_passes_tools_to_client(mock_ollama_client):
     """Tools should be forwarded to ollama client.chat()."""
     config = OllamaConfig(model="llama3.1:70b", temperature=0.1, max_tokens=100, top_p=1.0)

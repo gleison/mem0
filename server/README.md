@@ -12,13 +12,19 @@ Mem0 ships a self-hosted FastAPI server plus a local dashboard. It is secure by 
 
 ### Prerequisites
 
-Copy the example env file and set a Postgres password (required):
+Create the Docker network shared with local AI clients, then copy the example env file and set the required secrets:
 
 ```bash
+docker network create local_ai
 cd server
 cp .env.example .env
-# Edit .env — at minimum set POSTGRES_PASSWORD and OPENAI_API_KEY
+# Edit .env — at minimum set POSTGRES_PASSWORD and JWT_SECRET
 ```
+
+The example configuration runs entirely locally with Ollama. On the first start it downloads
+`qwen3:4b-instruct-2507-q8_0` for memory extraction and `qwen3-embedding:0.6b-q8_0`
+for 1024-dimensional embeddings. The model files are retained in the `ollama_data` volume.
+No OpenAI API key is required for this configuration.
 
 ### Agent-first
 
@@ -105,6 +111,45 @@ Wire the command into cron or a systemd timer in production. The `created_at` co
 - Dashboard: `http://localhost:3000`
 - API: `http://localhost:8888`
 - OpenAPI docs: `http://localhost:8888/docs`
+
+## Connect a local AI client
+
+The API joins the external `local_ai` network by default. Attach any local agent or AI client
+container to that network:
+
+```bash
+docker network connect local_ai your-ai-client
+```
+
+Declare the same external network in the client Compose project so the connection survives
+container recreation:
+
+```yaml
+services:
+  agent:
+    networks:
+      - local_ai
+
+networks:
+  local_ai:
+    external: true
+```
+
+Configure the client to use `http://mem0:8000` and keep its API key in a secret environment
+variable. The host ports for the API, dashboard, and PostgreSQL bind to `127.0.0.1`;
+container-to-container traffic uses the Docker networks and does not depend on those published
+ports.
+
+`MEM0_DEFAULT_LLM_MAX_TOKENS=0` leaves the generation limit unset so Ollama can apply its own
+default. Set a positive value to send an explicit `num_predict` limit.
+
+Changing embedding models or `MEM0_DEFAULT_EMBEDDING_DIMS` requires a new
+`POSTGRES_COLLECTION_NAME` or a full re-embedding migration. Do not point a collection created
+with 1536- or 768-dimensional vectors at the default 1024-dimensional Qwen embedder.
+
+Configuration saved previously through the dashboard or `POST /configure` is stored in PostgreSQL
+and takes precedence over these environment defaults. Update the active configuration through the
+same interface when converting an existing installation from a hosted provider to Ollama.
 
 ## Dashboard
 

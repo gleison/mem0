@@ -6,17 +6,20 @@ services:
       context: ..
       dockerfile: server/dev.Dockerfile
     ports:
-      - "8888:8000"
+      - "127.0.0.1:8888:8000"
     env_file:
       - .env
     networks:
       - mem0_network
+      - local_ai
     volumes:
       - ./history:/app/history
       - .:/app
     depends_on:
       postgres:
         condition: service_healthy
+      ollama-models:
+        condition: service_completed_successfully
     command: >
       sh -c "rm -rf /app/packages && pip install -q --force-reinstall --no-deps mem0ai && alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
     environment:
@@ -28,6 +31,37 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - AUTH_DISABLED=${AUTH_DISABLED:-false}
       - MEM0_TELEMETRY=${MEM0_TELEMETRY:-true}
+
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - mem0_network
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  ollama-models:
+    image: ollama/ollama:latest
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        ollama pull "$${MEM0_DEFAULT_LLM_MODEL}" &&
+        ollama pull "$${MEM0_DEFAULT_EMBEDDER_MODEL}"
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - MEM0_DEFAULT_LLM_MODEL=${MEM0_DEFAULT_LLM_MODEL:-qwen3:4b-instruct-2507-q8_0}
+      - MEM0_DEFAULT_EMBEDDER_MODEL=${MEM0_DEFAULT_EMBEDDER_MODEL:-qwen3-embedding:0.6b-q8_0}
+    networks:
+      - mem0_network
+    depends_on:
+      ollama:
+        condition: service_healthy
 
   postgres:
       image: pgvector/pgvector:pg17
@@ -47,12 +81,12 @@ services:
         - postgres_db:/var/lib/postgresql/data
         - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
       ports:
-        - "8432:5432"
+        - "127.0.0.1:8432:5432"
 
   mem0-dashboard:
     build: ./dashboard
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     networks:
       - mem0_network
     environment:
@@ -70,7 +104,11 @@ services:
 
 volumes:
   postgres_db:
+  ollama_data:
 
 networks:
   mem0_network:
     driver: bridge
+  local_ai:
+    external: true
+    name: ${MEM0_SHARED_NETWORK:-local_ai}

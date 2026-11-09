@@ -126,16 +126,13 @@ class OllamaLLM(LLMBase):
                 messages.append({"role": "user", "content": "Please respond with valid JSON only."})
             params["messages"] = messages
 
-        # Add options for Ollama (temperature, num_predict, top_p)
         options = {
             "temperature": self.config.temperature,
-            "num_predict": self.config.max_tokens,
             "top_p": self.config.top_p,
         }
+        if self.config.max_tokens > 0:
+            options["num_predict"] = self.config.max_tokens
         params["options"] = options
-
-        # Remove OpenAI-specific parameters that Ollama doesn't support
-        params.pop("max_tokens", None)  # Ollama uses different parameter names
 
         if tools:
             params["tools"] = tools
